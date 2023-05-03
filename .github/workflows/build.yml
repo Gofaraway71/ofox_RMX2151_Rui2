@@ -17,7 +17,7 @@ on:
 env:
   Rec_name: Ofox
   Rec_ver: "12.1"
-  Rec_url: https://gitlab.com/OrangeFox/sync.git -b master
+  Rec_url: https://gitlab.com/OrangeFox/sync.git -b main
   device: RMX2151
   DT_url: https://github.com/Gofaraway71/ofox_RMX2151_Rui2 -b main
   DT_path: device/realme/RMX2151
