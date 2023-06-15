@@ -41,7 +41,7 @@ jobs:
           echo "::group::Install Build Env Tool"
           sudo -E apt-get clean
           sudo -E apt-get -qq update
-          sudo -E apt-get -qq install curl libstdc++6 git wget repo rsync aria2
+          sudo -E apt-get -qq install curl libstdc++6 git wget rsync aria2
           echo "::endgroup::"
           git config --global user.name "${{github.actor}}"
           git config --global user.email "1844766234@qq.com"
