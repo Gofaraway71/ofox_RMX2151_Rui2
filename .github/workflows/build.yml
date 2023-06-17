@@ -1,194 +1,179 @@
-name: OFOX Builder
+name:  OFOX Builder
 on:
   workflow_dispatch:
     inputs:
-      crypto:
-        description: "是否禁用加密模块，true or false"
-        required: false
-        default: "false"
-      Enable_cache:
-        description: "是否启用cache，true or false"
+      MANIFEST_URL:
+        description: 'MANIFEST_URL (if using SSH keys, use git@github.com:repo URL format)'
         required: true
-        default: "true"
-      Delete_oldReleases:
-        description: "是否删除旧的发布，true or false"
+        default: 'https://gitlab.com/OrangeFox/sync.git'
+      MANIFEST_BRANCH:
+        description: 'MANIFEST_BRANCH'
+        required: true
+        default: 'master'
+      DEVICE_TREE_URL:
+        description: 'DEVICE_TREE_URL'
+        required: true
+        default: 'https://github.com/Gofaraway71/ofox_RMX2151_Rui2'
+      DEVICE_TREE_BRANCH:
+        description: 'DEVICE_TREE_BRANCH'
+        required: true
+        default: 'main'
+      DEVICE_PATH:
+        description: 'DEVICE_PATH'
+        required: true
+        default: 'device/realme/RMX2151'
+      COMMON_TREE_URL:
+        description: 'COMMON_TREE_URL (if no common tree, leave blank)'
         required: false
-        default: "false"
-env:
-  Rec_name: Ofox
-  Rec_ver: "12.1"
-  Rec_url: https://gitlab.com/OrangeFox/sync.git -b master
-  device: RMX2151
-  DT_url: https://github.com/Gofaraway71/ofox_RMX2151_Rui2 -b main
-  DT_path: device/realme/RMX2151
-  ProductFileHeader: twrp
-  target: recoveryimage
-  WorkSpace: WorkSpace
-  TZ: Asia/Shanghai
-  Author: ${{github.actor}}
-  Delete_old: false
+      COMMON_PATH:
+        description: 'COMMON_PATH (if no common tree, leave blank)'
+        required: false
+      DEVICE_NAME:
+        description: 'DEVICE_NAME'
+        required: true
+        default: 'RMX2151'
+      MAKEFILE_NAME:
+        description: 'MAKEFILE_NAME'
+        required: true
+        default: 'twrp_RMX2151'
+      BUILD_TARGET:
+        description: 'BUILD_TARGET'
+        required: true
+        default: 'recovery'
 
 jobs:
   build:
+    if: github.event.repository.owner.id == github.event.sender.id
     runs-on: ubuntu-20.04
-
+    # You can use either of the ubuntu-18.04 or ubuntu-20.04 runner
     steps:
-      - name: "Cleanup Environment"
-        uses: rokibhasansagar/slimhub_actions@main
+    - name: Display Run Parameters
+      run: |
+        echo "::group::User Environment Variables"
+        echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
+        echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
+        echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
+        echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
+        echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
+        echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
+        echo "Makefile Name: ${{ github.event.inputs.MAKEFILE_NAME }}"
+        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
+        echo "::endgroup::"
+ 
+    # You might want to Checkout your repo first, but not mandatory
+    - name: Check Out
+      uses: actions/checkout@v3
+    # Cleanup The Actions Workspace Using Custom Composite Run Actions
+    - name: Cleanup
+      uses: rokibhasansagar/slimhub_actions@main
+      # That's it! Now use your normal steps
 
-      - name: Initializing environment
-        run: |
-          echo "::group::Install Build Env Tool"
-          sudo -E apt-get clean
-          sudo -E apt-get -qq update
-          sudo -E apt-get -qq install curl libstdc++6 git wget rsync aria2
-          echo "::endgroup::"
-          git config --global user.name "${{github.actor}}"
-          git config --global user.email "1844766234@qq.com"
-          git clone https://github.com/akhilnarang/scripts --depth=1 --single-branch
-          cd scripts
-          echo "::group::Setup Build Env"
-          sudo -E bash setup/android_build_env.sh
-          echo "::endgroup::"
-          echo "::group::Install Android Sdk"
-          sudo -E bash setup/install_android_sdk.sh
-          echo "::endgroup::"
-      - name: Sync recovery source
-        run: |
-          mkdir ${{env.WorkSpace}}
-          git clone ${{env.Rec_url}} --depth=1 --single-branch
-          cd sync
-          echo "::group::Orangefox_sync help"
-          ./orangefox_sync.sh --help
-          echo "::endgroup::"
-          echo "::group::Run Orangefox_sync.sh"
-          ./orangefox_sync.sh --branch ${{env.Rec_ver}} --path ${{github.workspace}}/${{env.WorkSpace}} --ssh 0
-          echo "::endgroup::"
-      - name: Sync device tree
-        run: |
-          cd ${{env.WorkSpace}}
-          git clone ${{env.DT_url}} --depth=1 --single-branch ${{env.DT_path}}
-      - name: Disable Crypto
-        if: (github.event.inputs.crypto == 'true' && github.event.inputs.crypto  != 'false') || contains(github.event.action, 'crypto')
-        run: |
-          cd ${{env.WorkSpace}}/${{env.DT_path}}
+    - name: Prepare the environment
+      run: |
+        sudo apt update
+        sudo apt -y upgrade
+        sudo apt -y install gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib libc6-dev lib32ncurses5-dev x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libxml2 lzop pngcrush schedtool squashfs-tools imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev python
 
-      - name: Show tree
-        run: tree -C -d -L 3
+    - name: Install OpenJDK
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '8'
 
-      - name: Restore cache
-        uses: actions/cache@v2
-        if: (github.event.inputs.Enable_cache == 'true' && github.event.inputs.Enable_cache  != 'false') || contains(github.event.action, 'Enable_cache')
-        with:
-          path: |
-            ~/.ccache
-            ${{env.WorkSpace}}/out
-          key: ${{runner.os}}-${{env.Rec_name}}-${{env.Rec_ver}}-${{env.device}}
-          restore-keys: |
-            ${{runner.os}}-${{env.Rec_name}}-${{env.Rec_ver}}-${{env.device}}
-      - name: Setup ccache
-        uses: alexjurkiewicz/setup-ccache@master
-        if: (github.event.inputs.Enable_cache == 'true' && github.event.inputs.Enable_cache  != 'false') || contains(github.event.action, 'Enable_cache')
-        with:
-          max-size: 5G
-          extra-config: |
-            keep_comments_cpp = true
-      - name: Build ${{env.Rec_name}}
-        run: |
-          cd ${{env.WorkSpace}}
-          echo "::group::Run Envsetup.sh"
-          source build/envsetup.sh || true
-          echo "::endgroup::"
-          echo "::group::Set EnvPath"
-          export ALLOW_MISSING_DEPENDENCIES=true
-          export FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER=1
-          export LC_ALL="C"
-          export OF_MAINTAINER="gofaraway71"
-          export FOX_VERSION="Unofficial"
-          export OF_SCREEN_H=2160
-          export OF_PATCH_AVB20=1
-          echo "::endgroup::"
-          echo "::group::Lunch ${{env.ProductFileHeader}}_${{env.device}}-eng"
-          lunch ${{env.ProductFileHeader}}_${{env.device}}-eng
-          echo "::endgroup::"
-          echo "::group::Build ${{env.Rec_name}}"
-          mka ${{env.target}}
-          echo "::endgroup::"
-        shell: bash
+    - name: Setup SSH Keys
+      if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') }}
+      uses: webfactory/ssh-agent@v0.5.4
+      with:
+          ssh-private-key: |
+              ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Get info
-        id: info
-        run: |
-          echo "::set-output name=date::$(/bin/date -u "+%Y-%m-%d-%H-%M")"
-          echo "::set-output name=OutFolder::"${{env.WorkSpace}}/out/target/product/${{env.device}}""
-        shell: bash
+    - name: Set variables
+      run: |
+        echo "::set-output name=date::$(date +%F)"
+      id: var
+      
+    - name: Install repo
+      run: |
+        mkdir ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        sudo ln -sf ~/bin/repo /usr/bin/repo
+    
+      
+    - name: Initialize repo
+      run: |
+        mkdir workspace
+        cd workspace
+        echo "::set-output name=pwd::$(pwd)"
+        git config --global user.name "Gofaraway71"
+        git config --global user.email "aalbatron@gmail.com"
+        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+      id: pwd
+          
+    - name: Repo Sync
+      run: |
+        repo sync -j$(nproc --all) --force-sync
+      working-directory: workspace
+      
+    - name: Clone device tree
+      run: |
+        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+      working-directory: ${{ steps.pwd.outputs.pwd }}
 
-      - name: Show Space Info
-        run: |
-          cd ${{steps.info.outputs.OutFolder}}
-          sudo rm -rf ${{env.Rec_name}}_for_${{env.device}}_by_${{env.Author}}_*.zip
-          sudo zip -r9 ${{env.Rec_name}}_for_${{env.device}}_by_${{env.Author}}_${{github.run_id}}.zip recovery.img
-          echo "::group::Out Directory Space"
-          du -sh
-          echo "::endgroup::"
-          echo "::group::Ccache Directory Space"
-          du -sh ~/.ccache
-          echo "::endgroup::"
-          echo "::group::Disk Space"
-          df -hlT /
-          echo "::endgroup::"
-          echo "::group::Out Tree"
-          tree -C -L 5 -I "obj*"
-          echo "::endgroup::"
-      - name: Upload firmware directory
-        uses: actions/upload-artifact@main
-        with:
-          name: ${{env.Rec_name}}_for_${{env.device}}-${{github.run_id}}
-          path: ${{steps.info.outputs.OutFolder}}/*.img
+    - name: Clone common tree
+      if: |
+        github.event.inputs.COMMON_TREE_URL != null
+        && github.event.inputs.COMMON_PATH != null
+      run: |
+        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
+      working-directory: ${{ steps.pwd.outputs.pwd }}
 
-      - name: Upload Release
-        uses: softprops/action-gh-release@master
-        with:
-          prerelease: true
-          files: |
-            ${{steps.info.outputs.OutFolder}}/recovery.img
-            ${{steps.info.outputs.OutFolder}}/*.zip
-          name: ${{env.Rec_name}}-${{env.device}}_${{github.run_id}}
-          tag_name: ${{env.device}}-${{env.Rec_name}}-${{steps.info.outputs.date}}
-          body: |
-            ${{env.Rec_name}}-${{env.Rec_ver}} for ${{env.device}} build at ${{steps.info.outputs.date}}
-            Actions:[${{github.run_id}}](${{github.server_url}}/${{github.repository}}/actions/runs/${{github.run_id}})
-            Download:[${{env.Rec_name}}_for_${{env.device}}_by_${{env.Author}}_${{github.run_id}}.zip](https://download.fastgit.org/${{github.repository}}/releases/download/${{env.device}}-${{env.Rec_name}}-${{steps.info.outputs.date}}/${{env.Rec_name}}_for_${{env.device}}_by_${{env.Author}}_${{github.run_id}}.zip)
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+    - name: Check Build Tree
+      uses: haya14busa/action-cond@v1
+      id: buildtree
+      with:
+        cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'master' }}
+        if_true: twrp
+        if_false: omni
 
-      - name: Remove old Releases
-        uses: dev-drprasad/delete-older-releases@v0.1.0
-        if: (github.event.inputs.Delete_oldReleases == 'true' && github.event.inputs.Delete_oldReleases  != 'false') || contains(github.event.action, 'Delete_oldReleases')
-        with:
-          keep_latest: 12
-          delete_tags: true
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+    - name: Sync Device Dependencies
+      run: |
+        bash ${GITHUB_WORKSPACE}/scripts/convert.sh ${{ github.event.inputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies
+        repo sync -j$(nproc --all)
+      working-directory: ${{ steps.pwd.outputs.pwd }}
+      continue-on-error: true
 
-      - name: Delete workflow runs
-        uses: GitRML/delete-workflow-runs@main
-        with:
-          keep_minimum_runs: 10
-            Download:[${{env.Rec_name}}_for_${{env.device}}_by_${{env.Author}}_${{github.run_id}}.zip](https://download.fastgit.org/${{github.repository}}/releases/download/${{env.device}}-${{env.Rec_name}}-${{steps.info.outputs.date}}/${{env.Rec_name}}_for_${{env.device}}_by_${{env.Author}}_${{github.run_id}}.zip)
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+    - name: Set Swap Space
+      uses: pierotofy/set-swap-space@master
+      with:
+        swap-size-gb: 12
 
-      - name: Remove old Releases
-        uses: dev-drprasad/delete-older-releases@v0.1.0
-        if: (github.event.inputs.Delete_oldReleases == 'true' && github.event.inputs.Delete_oldReleases  != 'false') || contains(github.event.action, 'Delete_oldReleases')
-        with:
-          keep_latest: 12
-          delete_tags: true
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+    - name: Check Build Branch
+      if: ${{ github.event.inputs.MANIFEST_BRANCH == 'master' }}
+      run: |
+        
+        source build/envsetup.sh
+        repopick 5405 5540
+      working-directory: ${{ steps.pwd.outputs.pwd }}
 
-      - name: Delete workflow runs
-        uses: GitRML/delete-workflow-runs@main
-        with:
-          keep_minimum_runs: 10
+    - name: Building recovery
+      run: |
+        sudo rm -rf out/ 
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+      working-directory: ${{ steps.pwd.outputs.pwd }}
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+        name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
+        tag_name: ${{ github.run_id }}
+        body: |
+          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
+          Device: ${{ github.event.inputs.DEVICE_NAME }}
+          Target: ${{ github.event.inputs.BUILD_TARGET }}.img
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
