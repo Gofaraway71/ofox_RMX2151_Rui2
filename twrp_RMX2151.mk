@@ -12,6 +12,9 @@ $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 # Inherit from RMX2151 device
 $(call inherit-product, device/realme/RMX2151/device.mk)
 
+# Inherit from our PitchBlack configuration
+$(call inherit-product, vendor/twrp/config/common.mk)
+
 PRODUCT_DEVICE := RMX2151
 PRODUCT_NAME := twrp_RMX2151
 PRODUCT_BRAND := realme
